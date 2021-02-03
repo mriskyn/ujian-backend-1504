@@ -22,9 +22,17 @@ class UserController {
       const isPassword = bcrypt.compareSync(password, data[0].password);
 
       if (isPassword) {
-        const user = { uid: data[0].uid, role: 2 }; //role masih default
-        const token = createToken(user);
-        res.status(200).json({ ...data[0], token });
+        const selectQuery = `SELECT role, status from users`;
+        db.query(selectQuery, (err2, data2) => {
+          if (err2) return res.status(500).send(err2);
+
+          if(data[0].status === 3) {
+              return res.status(400).json({msg: 'Account is Closed'})
+          }
+          const user = { uid: data[0].uid, role: data2[0].role };
+          const token = createToken(user);
+          res.status(200).json({ ...data[0], token });
+        });
       } else {
         res.status(400).json({ msg: "Invalid username / email / password" });
       }
@@ -46,19 +54,22 @@ class UserController {
     db.query(query, (err, data) => {
       if (err) return res.status(500).send(err);
 
-      const user = { uid: unique_id, role: 2 }; //role masih default
-      const token = createToken(user);
+      const selectQuery = `SELECT username, role from users`;
+      db.query(selectQuery, (err2, data2) => {
+        if (err2) return res.status(500).send(err2);
 
-      res.status(201).json({
-        id: data.insertId,
-        uid: unique_id,
-        username,
-        email,
-        status: 1,
-        role: 2,
-        token,
+        const user = { uid: unique_id, role: data2[0].role };
+        const token = createToken(user);
+
+        res.status(201).json({
+          id: data.insertId,
+          ...user,
+          username,
+          email,
+          status: 1,
+          token,
+        });
       });
-      // db.query()
     });
   }
 
@@ -66,7 +77,7 @@ class UserController {
     const { uid } = req.user;
     const query = `UPDATE users SET status=2 WHERE uid=${db.escape(uid)}`;
 
-    const queryGet = `SELECT (status) FROM users WHERE uid=${db.escape(uid)}`;
+    const queryGet = `SELECT status FROM users WHERE uid=${db.escape(uid)}`;
 
     db.query(queryGet, (err, data) => {
       const { status } = data[0];
@@ -82,10 +93,10 @@ class UserController {
             status: "active",
           });
         });
-      } else if (status === 3){
-          res.status(400).json({ msg: "Account is Closed!" });
+      } else if (status === 3) {
+        res.status(400).json({ msg: "Account is Closed!" });
       } else {
-          res.status(400).json({ msg: "Account is already deactivated!" });
+        res.status(400).json({ msg: "Account is already deactivated!" });
       }
     });
 
